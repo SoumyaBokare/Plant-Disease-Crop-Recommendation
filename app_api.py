@@ -5,6 +5,10 @@ import pandas as pd
 from PIL import Image
 import os
 import requests
+import json
+from datetime import datetime
+import json
+from datetime import datetime
 
 # ---- TensorFlow import with platform checks ----
 TENSORFLOW_AVAILABLE = False
@@ -45,6 +49,124 @@ def load_models():
         st.sidebar.error(f"❌ Crop model failed: {str(e)[:100]}...")
         crop_model = None
     return plant_model, crop_model
+
+# Ollama chatbot functions
+def query_ollama(prompt, model_name="llama3.2"):
+    """Query Ollama API"""
+    try:
+        url = "http://localhost:11434/api/generate"
+        data = {
+            "model": model_name,
+            "prompt": prompt,
+            "stream": False
+        }
+        response = requests.post(url, json=data, timeout=30)
+        if response.status_code == 200:
+            return response.json().get('response', 'No response received')
+        else:
+            return f"Error: {response.status_code} - {response.text}"
+    except requests.exceptions.ConnectionError:
+        return "❌ Cannot connect to Ollama. Please ensure Ollama is running on localhost:11434"
+    except Exception as e:
+        return f"❌ Error querying Ollama: {str(e)}"
+
+def create_agricultural_prompt(user_question, context=""):
+    """Create a specialized prompt for agricultural chatbot"""
+    base_prompt = f"""You are an expert Agricultural AI Assistant specializing in crop knowledge and climate science. 
+Your role is to provide accurate, practical advice to farmers and agricultural professionals.
+
+Key areas of expertise:
+1. Climate requirements for different crops
+2. Soil conditions and crop suitability
+3. Seasonal planting and harvesting advice
+4. Weather patterns and agricultural planning
+5. Crop rotation and sustainable farming practices
+6. Regional agricultural recommendations
+
+Guidelines:
+- Provide specific, actionable advice
+- Include scientific reasoning when relevant
+- Consider regional variations in climate
+- Focus on practical farming applications
+- Suggest climate-resilient alternatives when appropriate
+
+{context}
+
+User Question: {user_question}
+
+Response:"""
+    return base_prompt
+
+def initialize_chat_history():
+    """Initialize chat history in session state"""
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+        # Add welcome message
+        welcome_msg = {
+            "role": "assistant", 
+            "content": "🌱 Hello! I'm your Agricultural AI Assistant. I can help you with:\n\n• Climate requirements for different crops\n• Soil conditions and crop suitability\n• Seasonal planting advice\n• Weather patterns and farming\n• Sustainable agriculture practices\n\nWhat would you like to know about crops and climate?",
+            "timestamp": datetime.now()
+        }
+        st.session_state.chat_history.append(welcome_msg)
+
+# Ollama chatbot functions
+def query_ollama(prompt, model_name="llama3.2"):
+    """Query Ollama API"""
+    try:
+        url = "http://localhost:11434/api/generate"
+        data = {
+            "model": model_name,
+            "prompt": prompt,
+            "stream": False
+        }
+        response = requests.post(url, json=data, timeout=30)
+        if response.status_code == 200:
+            return response.json().get('response', 'No response received')
+        else:
+            return f"Error: {response.status_code} - {response.text}"
+    except requests.exceptions.ConnectionError:
+        return "❌ Cannot connect to Ollama. Please ensure Ollama is running on localhost:11434"
+    except Exception as e:
+        return f"❌ Error querying Ollama: {str(e)}"
+
+def create_agricultural_prompt(user_question, context=""):
+    """Create a specialized prompt for agricultural chatbot"""
+    base_prompt = f"""You are an expert Agricultural AI Assistant specializing in crop knowledge and climate science. 
+Your role is to provide accurate, practical advice to farmers and agricultural professionals.
+
+Key areas of expertise:
+1. Climate requirements for different crops
+2. Soil conditions and crop suitability
+3. Seasonal planting and harvesting advice
+4. Weather patterns and agricultural planning
+5. Crop rotation and sustainable farming practices
+6. Regional agricultural recommendations
+
+Guidelines:
+- Provide specific, actionable advice
+- Include scientific reasoning when relevant
+- Consider regional variations in climate
+- Focus on practical farming applications
+- Suggest climate-resilient alternatives when appropriate
+
+{context}
+
+User Question: {user_question}
+
+Response:"""
+    return base_prompt
+
+def initialize_chat_history():
+    """Initialize chat history in session state"""
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+        # Add welcome message
+        welcome_msg = {
+            "role": "assistant", 
+            "content": "🌱 Hello! I'm your Agricultural AI Assistant. I can help you with:\n\n• Climate requirements for different crops\n• Soil conditions and crop suitability\n• Seasonal planting advice\n• Weather patterns and farming\n• Sustainable agriculture practices\n\nWhat would you like to know about crops and climate?",
+            "timestamp": datetime.now()
+        }
+        st.session_state.chat_history.append(welcome_msg)
 
 PLANT_DISEASE_CLASSES = [
     'Apple___Apple_scab', 'Apple___Black_rot', 'Apple___Cedar_apple_rust', 'Apple___healthy',
@@ -115,10 +237,11 @@ def main():
     st.sidebar.info(f"Plant Disease Model: {'✅ Loaded' if plant_model else '❌ Not Loaded'}")
     st.sidebar.info(f"Crop Model: {'✅ Loaded' if crop_model else '❌ Not Loaded'}")
 
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "🔍 Plant Disease Classification",
         "🌾 Manual Crop Recommendation",
-        "⚡ Auto-Fill Crop Recommendation (Weather API)"
+        "⚡ Auto-Fill Crop Recommendation (Weather API)",
+        "🤖 Agricultural AI Chat"
     ])
 
     # ---- Plant Disease Tab ----
@@ -127,7 +250,7 @@ def main():
         if not TENSORFLOW_AVAILABLE or plant_model is None:
             st.error("🚫 **Plant Disease Classification is currently unavailable**")
             if not TENSORFLOW_AVAILABLE:
-                st.info("**Reason:** TensorFlow compatibility issues on macOS")
+                st.info("**Reason:** TensorFlow not available or failed to load")
             else:
                 st.info("**Reason:** Could not load the disease classification model")
             st.markdown("**💡 Alternative Solutions:**")
@@ -254,6 +377,143 @@ def main():
                             st.table(input_df)
                         else:
                             st.error(f"❌ {recommended_crop}")
+
+    # ---- Agricultural AI Chatbot Tab ----
+    with tab4:
+        st.header("🤖 Agricultural AI Assistant")
+        st.markdown("""
+        Ask me anything about:
+        • **Climate Requirements** for different crops
+        • **Soil Conditions** and crop suitability  
+        • **Seasonal Planning** and planting calendars
+        • **Weather Patterns** and agricultural planning
+        • **Sustainable Farming** practices
+        """)
+        
+        # Initialize chat history
+        initialize_chat_history()
+        
+        # Ollama model selection
+        col1, col2 = st.columns([3, 1])
+        with col2:
+            model_options = ["llama3.2", "llama3.1", "mistral", "codellama", "gemma2"]
+            selected_model = st.selectbox("🤖 Model", model_options, index=0)
+            
+            # Clear chat button
+            if st.button("🗑️ Clear Chat", use_container_width=True):
+                st.session_state.chat_history = []
+                initialize_chat_history()
+                st.rerun()
+        
+        # Chat container
+        chat_container = st.container()
+        
+        # Display chat history
+        with chat_container:
+            for message in st.session_state.chat_history:
+                if message["role"] == "user":
+                    with st.chat_message("user"):
+                        st.write(f"**You:** {message['content']}")
+                        st.caption(f"_{message['timestamp'].strftime('%H:%M:%S')}_")
+                else:
+                    with st.chat_message("assistant"):
+                        st.write(f"**AI Assistant:** {message['content']}")
+                        st.caption(f"_{message['timestamp'].strftime('%H:%M:%S')}_")
+        
+        # Chat input
+        user_input = st.chat_input("Ask about crops, climate, or farming...")
+        
+        if user_input:
+            # Add user message to history
+            user_msg = {
+                "role": "user",
+                "content": user_input,
+                "timestamp": datetime.now()
+            }
+            st.session_state.chat_history.append(user_msg)
+            
+            # Generate context from recent conversation
+            recent_context = ""
+            if len(st.session_state.chat_history) > 2:
+                recent_messages = st.session_state.chat_history[-4:]  # Last 2 exchanges
+                context_parts = []
+                for msg in recent_messages:
+                    context_parts.append(f"{msg['role'].title()}: {msg['content'][:200]}")
+                recent_context = f"Recent conversation context:\n" + "\n".join(context_parts) + "\n\n"
+            
+            # Create specialized prompt
+            agricultural_prompt = create_agricultural_prompt(user_input, recent_context)
+            
+            # Show thinking indicator
+            with st.chat_message("assistant"):
+                with st.spinner("🤔 Thinking..."):
+                    # Query Ollama
+                    response = query_ollama(agricultural_prompt, selected_model)
+                    
+                    # Add assistant response to history
+                    assistant_msg = {
+                        "role": "assistant",
+                        "content": response,
+                        "timestamp": datetime.now()
+                    }
+                    st.session_state.chat_history.append(assistant_msg)
+                    
+                    # Display response
+                    st.write(f"**AI Assistant:** {response}")
+                    st.caption(f"_{assistant_msg['timestamp'].strftime('%H:%M:%S')}_")
+            
+            # Auto-scroll to bottom
+            st.rerun()
+        
+        # Quick question buttons
+        st.markdown("### 💡 Quick Questions:")
+        col1, col2, col3 = st.columns(3)
+        
+        quick_questions = [
+            "What crops grow best in hot, humid climates?",
+            "How does rainfall affect crop selection?",
+            "What are the soil requirements for rice cultivation?",
+            "Which crops are drought resistant?",
+            "What is the best planting season for wheat?",
+            "How does temperature affect crop growth?"
+        ]
+        
+        for i, question in enumerate(quick_questions):
+            col = col1 if i % 3 == 0 else (col2 if i % 3 == 1 else col3)
+            with col:
+                if st.button(question, key=f"quick_q_{i}", use_container_width=True):
+                    # Simulate user input
+                    user_msg = {
+                        "role": "user",
+                        "content": question,
+                        "timestamp": datetime.now()
+                    }
+                    st.session_state.chat_history.append(user_msg)
+                    
+                    # Generate response
+                    agricultural_prompt = create_agricultural_prompt(question)
+                    response = query_ollama(agricultural_prompt, selected_model)
+                    
+                    assistant_msg = {
+                        "role": "assistant",
+                        "content": response,
+                        "timestamp": datetime.now()
+                    }
+                    st.session_state.chat_history.append(assistant_msg)
+                    st.rerun()
+        
+        # Ollama status check
+        st.markdown("---")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown("**💡 Tip:** Make sure Ollama is running locally for the chatbot to work.")
+        with col2:
+            if st.button("🔍 Test Ollama Connection"):
+                test_response = query_ollama("Hello", selected_model)
+                if "Cannot connect" in test_response or "Error" in test_response:
+                    st.error("❌ Ollama not accessible")
+                else:
+                    st.success("✅ Ollama connected")
 
     st.markdown("---")
     st.markdown("""
